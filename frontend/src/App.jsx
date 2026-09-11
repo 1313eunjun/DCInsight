@@ -5,6 +5,13 @@ import "./App.css";
 function App() {
   const [servers, setServers] = useState([]);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const [autoTraffic, setAutoTraffic] =
+    useState(false);
+
+  const [requestsPerSecond, setRequestsPerSecond] =
+    useState(2);
 
 
   const fetchServers = async () => {
@@ -29,6 +36,71 @@ function App() {
   };
 
 
+  const sendRequests = async (count) => {
+    setSending(true);
+    setError("");
+
+    try {
+      for (let i = 0; i < count; i++) {
+        const response = await fetch(
+          "http://127.0.0.1:8000/request",
+          {
+            method: "POST",
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error();
+        }
+      }
+
+      await fetchServers();
+    } catch {
+      setError(
+        "Could not send traffic to the backend."
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+
+  const failServer = async (serverId) => {
+    try {
+      await fetch(
+        `http://127.0.0.1:8000/servers/${serverId}/fail`,
+        {
+          method: "POST",
+        }
+      );
+
+      await fetchServers();
+    } catch {
+      setError(
+        "Could not fail the selected server."
+      );
+    }
+  };
+
+
+  const recoverServer = async (serverId) => {
+    try {
+      await fetch(
+        `http://127.0.0.1:8000/servers/${serverId}/recover`,
+        {
+          method: "POST",
+        }
+      );
+
+      await fetchServers();
+    } catch {
+      setError(
+        "Could not recover the selected server."
+      );
+    }
+  };
+
+
   useEffect(() => {
     fetchServers();
 
@@ -39,6 +111,74 @@ function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+
+  useEffect(() => {
+    if (!autoTraffic) {
+      return;
+    }
+
+    const trafficInterval = setInterval(
+      async () => {
+        try {
+          for (
+            let i = 0;
+            i < requestsPerSecond;
+            i++
+          ) {
+            await fetch(
+              "http://127.0.0.1:8000/request",
+              {
+                method: "POST",
+              }
+            );
+          }
+
+          await fetchServers();
+        } catch {
+          setError(
+            "Auto traffic could not reach the backend."
+          );
+        }
+      },
+      1000
+    );
+
+    return () =>
+      clearInterval(trafficInterval);
+  }, [
+    autoTraffic,
+    requestsPerSecond,
+  ]);
+
+
+  const totalRequests =
+    servers.reduce(
+      (total, server) =>
+        total + server.request_count,
+      0
+    );
+
+
+  const healthyServers =
+    servers.filter(
+      (server) =>
+        server.status === "healthy"
+    ).length;
+
+
+  const overloadedServers =
+    servers.filter(
+      (server) =>
+        server.status === "overloaded"
+    ).length;
+
+
+  const failedServers =
+    servers.filter(
+      (server) =>
+        server.status === "failed"
+    ).length;
 
 
   return (
@@ -65,49 +205,122 @@ function App() {
         </div>
       )}
 
+      <section className="traffic-controls">
+        <div>
+          <span className="control-label">
+            TRAFFIC CONTROL
+          </span>
+
+          <h2>Generate Requests</h2>
+
+          <p>
+            Send simulated traffic through the
+            Round Robin load balancer.
+          </p>
+        </div>
+
+        <div className="traffic-buttons">
+          <button
+            onClick={() => sendRequests(1)}
+            disabled={sending}
+          >
+            Send Request
+          </button>
+
+          <button
+            className="secondary-button"
+            onClick={() => sendRequests(10)}
+            disabled={sending}
+          >
+            Send 10 Requests
+          </button>
+        </div>
+      </section>
+
+      <section className="auto-traffic-panel">
+        <div className="auto-traffic-info">
+          <span className="control-label">
+            AUTO TRAFFIC
+          </span>
+
+          <h2>
+            Continuous Request Generator
+          </h2>
+
+          <p>
+            Automatically send traffic every
+            second.
+          </p>
+        </div>
+
+        <div className="auto-traffic-controls">
+          <div className="rate-control">
+            <label>
+              Requests / second
+            </label>
+
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={requestsPerSecond}
+              onChange={(event) =>
+                setRequestsPerSecond(
+                  Number(
+                    event.target.value
+                  )
+                )
+              }
+            />
+
+            <strong>
+              {requestsPerSecond}
+            </strong>
+          </div>
+
+          <button
+            className={
+              autoTraffic
+                ? "stop-button"
+                : "start-button"
+            }
+            onClick={() =>
+              setAutoTraffic(
+                !autoTraffic
+              )
+            }
+          >
+            {autoTraffic
+              ? "Stop Auto Traffic"
+              : "Start Auto Traffic"}
+          </button>
+        </div>
+      </section>
+
       <section className="overview">
         <div className="overview-card">
           <span>Servers</span>
-          <strong>
-            {servers.length}
-          </strong>
+          <strong>{servers.length}</strong>
         </div>
 
         <div className="overview-card">
           <span>Healthy</span>
-          <strong>
-            {
-              servers.filter(
-                (server) =>
-                  server.status === "healthy"
-              ).length
-            }
-          </strong>
+          <strong>{healthyServers}</strong>
         </div>
 
         <div className="overview-card">
           <span>Overloaded</span>
-          <strong>
-            {
-              servers.filter(
-                (server) =>
-                  server.status === "overloaded"
-              ).length
-            }
-          </strong>
+          <strong>{overloadedServers}</strong>
+        </div>
+
+        <div className="overview-card">
+          <span>Failed</span>
+          <strong>{failedServers}</strong>
         </div>
 
         <div className="overview-card">
           <span>Total Requests</span>
-          <strong>
-            {
-              servers.reduce(
-                (total, server) =>
-                  total + server.request_count,
-                0
-              )
-            }
-          </strong>
+          <strong>{totalRequests}</strong>
         </div>
       </section>
 
@@ -201,6 +414,32 @@ function App() {
                     {server.request_count}
                   </strong>
                 </div>
+              </div>
+
+              <div className="server-actions">
+                {server.status === "failed" ? (
+                  <button
+                    className="recover-button"
+                    onClick={() =>
+                      recoverServer(
+                        server.server_id
+                      )
+                    }
+                  >
+                    Recover Server
+                  </button>
+                ) : (
+                  <button
+                    className="fail-button"
+                    onClick={() =>
+                      failServer(
+                        server.server_id
+                      )
+                    }
+                  >
+                    Fail Server
+                  </button>
+                )}
               </div>
             </div>
           ))}
