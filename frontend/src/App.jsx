@@ -4,6 +4,8 @@ import "./App.css";
 
 function App() {
   const [servers, setServers] = useState([]);
+  const [events, setEvents] = useState([]);
+
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -36,6 +38,35 @@ function App() {
   };
 
 
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/events"
+      );
+
+      if (!response.ok) {
+        throw new Error();
+      }
+
+      const data = await response.json();
+
+      setEvents(data);
+    } catch {
+      setError(
+        "Could not load incident history."
+      );
+    }
+  };
+
+
+  const refreshDashboard = async () => {
+    await Promise.all([
+      fetchServers(),
+      fetchEvents(),
+    ]);
+  };
+
+
   const sendRequests = async (count) => {
     setSending(true);
     setError("");
@@ -54,7 +85,7 @@ function App() {
         }
       }
 
-      await fetchServers();
+      await refreshDashboard();
     } catch {
       setError(
         "Could not send traffic to the backend."
@@ -67,14 +98,18 @@ function App() {
 
   const failServer = async (serverId) => {
     try {
-      await fetch(
+      const response = await fetch(
         `http://127.0.0.1:8000/servers/${serverId}/fail`,
         {
           method: "POST",
         }
       );
 
-      await fetchServers();
+      if (!response.ok) {
+        throw new Error();
+      }
+
+      await refreshDashboard();
     } catch {
       setError(
         "Could not fail the selected server."
@@ -85,14 +120,18 @@ function App() {
 
   const recoverServer = async (serverId) => {
     try {
-      await fetch(
+      const response = await fetch(
         `http://127.0.0.1:8000/servers/${serverId}/recover`,
         {
           method: "POST",
         }
       );
 
-      await fetchServers();
+      if (!response.ok) {
+        throw new Error();
+      }
+
+      await refreshDashboard();
     } catch {
       setError(
         "Could not recover the selected server."
@@ -102,10 +141,10 @@ function App() {
 
 
   useEffect(() => {
-    fetchServers();
+    refreshDashboard();
 
     const interval = setInterval(
-      fetchServers,
+      refreshDashboard,
       1000
     );
 
@@ -134,7 +173,7 @@ function App() {
             );
           }
 
-          await fetchServers();
+          await refreshDashboard();
         } catch {
           setError(
             "Auto traffic could not reach the backend."
@@ -324,126 +363,184 @@ function App() {
         </div>
       </section>
 
-      <section className="servers-section">
-        <div className="section-title">
-          <h2>Server Cluster</h2>
+      <section className="dashboard-grid">
+        <div className="servers-section">
+          <div className="section-title">
+            <h2>Server Cluster</h2>
 
-          <span>
-            Round Robin Load Balancer
-          </span>
+            <span>
+              Round Robin Load Balancer
+            </span>
+          </div>
+
+          <div className="server-grid">
+            {servers.map((server) => (
+              <div
+                className={`server-card ${server.status}`}
+                key={server.server_id}
+              >
+                <div className="server-card-header">
+                  <div>
+                    <span className="server-label">
+                      SERVER
+                    </span>
+
+                    <h3>
+                      Node {server.server_id}
+                    </h3>
+                  </div>
+
+                  <div
+                    className={`status-badge ${server.status}`}
+                  >
+                    {server.status}
+                  </div>
+                </div>
+
+                <div className="metric">
+                  <div className="metric-header">
+                    <span>CPU</span>
+                    <span>
+                      {server.cpu_usage}%
+                    </span>
+                  </div>
+
+                  <div className="metric-bar">
+                    <div
+                      className="metric-fill"
+                      style={{
+                        width: `${server.cpu_usage}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="metric">
+                  <div className="metric-header">
+                    <span>Memory</span>
+                    <span>
+                      {server.memory_usage}%
+                    </span>
+                  </div>
+
+                  <div className="metric-bar">
+                    <div
+                      className="metric-fill"
+                      style={{
+                        width: `${server.memory_usage}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="server-stats">
+                  <div>
+                    <span>Latency</span>
+                    <strong>
+                      {server.latency.toFixed(1)} ms
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Queue</span>
+                    <strong>
+                      {server.queue_length}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Requests</span>
+                    <strong>
+                      {server.request_count}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="server-actions">
+                  {server.status === "failed" ? (
+                    <button
+                      className="recover-button"
+                      onClick={() =>
+                        recoverServer(
+                          server.server_id
+                        )
+                      }
+                    >
+                      Recover Server
+                    </button>
+                  ) : (
+                    <button
+                      className="fail-button"
+                      onClick={() =>
+                        failServer(
+                          server.server_id
+                        )
+                      }
+                    >
+                      Fail Server
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="server-grid">
-          {servers.map((server) => (
-            <div
-              className={`server-card ${server.status}`}
-              key={server.server_id}
-            >
-              <div className="server-card-header">
-                <div>
-                  <span className="server-label">
-                    SERVER
-                  </span>
+        <aside className="incident-panel">
+          <div className="incident-header">
+            <div>
+              <span className="control-label">
+                EVENT STREAM
+              </span>
 
-                  <h3>
-                    Node {server.server_id}
-                  </h3>
-                </div>
-
-                <div
-                  className={`status-badge ${server.status}`}
-                >
-                  {server.status}
-                </div>
-              </div>
-
-              <div className="metric">
-                <div className="metric-header">
-                  <span>CPU</span>
-                  <span>
-                    {server.cpu_usage}%
-                  </span>
-                </div>
-
-                <div className="metric-bar">
-                  <div
-                    className="metric-fill"
-                    style={{
-                      width: `${server.cpu_usage}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="metric">
-                <div className="metric-header">
-                  <span>Memory</span>
-                  <span>
-                    {server.memory_usage}%
-                  </span>
-                </div>
-
-                <div className="metric-bar">
-                  <div
-                    className="metric-fill"
-                    style={{
-                      width: `${server.memory_usage}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="server-stats">
-                <div>
-                  <span>Latency</span>
-                  <strong>
-                    {server.latency.toFixed(1)} ms
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Queue</span>
-                  <strong>
-                    {server.queue_length}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Requests</span>
-                  <strong>
-                    {server.request_count}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="server-actions">
-                {server.status === "failed" ? (
-                  <button
-                    className="recover-button"
-                    onClick={() =>
-                      recoverServer(
-                        server.server_id
-                      )
-                    }
-                  >
-                    Recover Server
-                  </button>
-                ) : (
-                  <button
-                    className="fail-button"
-                    onClick={() =>
-                      failServer(
-                        server.server_id
-                      )
-                    }
-                  >
-                    Fail Server
-                  </button>
-                )}
-              </div>
+              <h2>Incident Timeline</h2>
             </div>
-          ))}
-        </div>
+
+            <span className="event-count">
+              {events.length}
+            </span>
+          </div>
+
+          <div className="incident-list">
+            {events.length === 0 ? (
+              <div className="empty-events">
+                No events recorded yet.
+              </div>
+            ) : (
+              events.map((event, index) => (
+                <div
+                  className="incident-item"
+                  key={`${event.time}-${index}`}
+                >
+                  <div
+                    className={`event-dot ${event.type}`}
+                  ></div>
+
+                  <div className="incident-content">
+                    <div className="incident-meta">
+                      <span
+                        className={`event-type ${event.type}`}
+                      >
+                        {event.type.replace(
+                          "_",
+                          " "
+                        )}
+                      </span>
+
+                      <span className="event-time">
+                        {event.time}
+                      </span>
+                    </div>
+
+                    <p>
+                      {event.message}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
       </section>
     </div>
   );

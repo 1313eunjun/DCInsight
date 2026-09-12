@@ -470,3 +470,185 @@ body {
   color: #86efac;
   border: 1px solid #166534;
 }
+.dashboard-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) 360px;
+
+  gap: 20px;
+  align-items: start;
+}
+
+.incident-panel {
+  padding: 22px;
+
+  background: #0b1726;
+  border: 1px solid #1d2c40;
+  border-radius: 20px;
+
+  max-height: 760px;
+  overflow: hidden;
+}
+
+.incident-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  margin-bottom: 20px;
+}
+
+.incident-header h2 {
+  margin: 6px 0 0;
+  font-size: 22px;
+}
+
+.event-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+
+  background: #132238;
+  border: 1px solid #263952;
+  border-radius: 999px;
+
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.incident-list {
+  max-height: 650px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.incident-item {
+  display: grid;
+  grid-template-columns:
+    12px minmax(0, 1fr);
+
+  gap: 12px;
+
+  padding: 14px 0;
+
+  border-bottom: 1px solid #17263a;
+}
+
+.incident-item:last-child {
+  border-bottom: none;
+}
+
+.event-dot {
+  width: 9px;
+  height: 9px;
+
+  margin-top: 5px;
+
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.event-dot.system {
+  background: #38bdf8;
+}
+
+.event-dot.failure {
+  background: #ef4444;
+}
+
+.event-dot.recovery {
+  background: #22c55e;
+}
+
+.event-dot.scale_out {
+  background: #a78bfa;
+}
+
+.event-dot.scale_in {
+  background: #f59e0b;
+}
+
+.incident-content {
+  min-width: 0;
+}
+
+.incident-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 10px;
+
+  margin-bottom: 5px;
+}
+
+.event-type {
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 1px;
+  text-transform: uppercase;
+
+  color: #94a3b8;
+}
+
+.event-type.system {
+  color: #38bdf8;
+}
+
+.event-type.failure {
+  color: #f87171;
+}
+
+.event-type.recovery {
+  color: #4ade80;
+}
+
+.event-type.scale_out {
+  color: #c4b5fd;
+}
+
+.event-type.scale_in {
+  color: #fbbf24;
+}
+
+.event-time {
+  color: #64748b;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.incident-content p {
+  margin: 0;
+
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.empty-events {
+  padding: 30px 0;
+
+  color: #64748b;
+  text-align: center;
+  font-size: 13px;
+}
+
+@media (max-width: 1150px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .incident-panel {
+    max-height: none;
+  }
+
+  .incident-list {
+    max-height: 400px;
+  }
+}

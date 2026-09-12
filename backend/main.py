@@ -2,6 +2,7 @@ import asyncio
 import time
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +41,24 @@ last_scale_out_time = 0
 last_scale_in_time = 0
 
 low_load_ticks = 0
+
+events = []
+
+
+def add_event(event_type, message):
+    events.insert(
+        0,
+        {
+            "time": datetime.now().strftime(
+                "%H:%M:%S"
+            ),
+            "type": event_type,
+            "message": message,
+        }
+    )
+
+    if len(events) > 100:
+        events.pop()
 
 
 def get_active_servers():
@@ -119,9 +138,12 @@ def maybe_scale_out():
             new_server
         )
 
-        print(
-            f"Autoscaler added "
-            f"Server {new_server.server_id}"
+        add_event(
+            "scale_out",
+            (
+                f"Server {new_server.server_id} "
+                f"added by autoscaler"
+            ),
         )
 
         next_server_id += 1
@@ -206,9 +228,12 @@ def maybe_scale_in():
         removable_server
     )
 
-    print(
-        f"Autoscaler removed "
-        f"Server {removable_server.server_id}"
+    add_event(
+        "scale_in",
+        (
+            f"Server {removable_server.server_id} "
+            f"removed after low load"
+        ),
     )
 
     last_scale_in_time = (
@@ -231,6 +256,11 @@ async def simulation_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    add_event(
+        "system",
+        "DCInsight simulation started",
+    )
+
     simulation_task = asyncio.create_task(
         simulation_loop()
     )
@@ -298,6 +328,11 @@ def get_servers():
     ]
 
 
+@app.get("/events")
+def get_events():
+    return events
+
+
 @app.post("/request")
 def send_request():
     load_balancer.route_request()
@@ -321,6 +356,11 @@ def fail_server(server_id: int):
         ):
             server.fail()
 
+            add_event(
+                "failure",
+                f"Server {server_id} failed",
+            )
+
             return {
                 "message":
                     f"Server {server_id} failed"
@@ -342,6 +382,11 @@ def recover_server(server_id: int):
             == server_id
         ):
             server.recover()
+
+            add_event(
+                "recovery",
+                f"Server {server_id} recovered",
+            )
 
             return {
                 "message":
