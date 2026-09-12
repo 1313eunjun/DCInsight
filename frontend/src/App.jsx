@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
 import "./App.css";
 
 
 function App() {
   const [servers, setServers] = useState([]);
   const [events, setEvents] = useState([]);
+
+  const [metricsHistory, setMetricsHistory] =
+    useState([]);
 
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -30,6 +43,59 @@ function App() {
 
       setServers(data);
       setError("");
+
+      if (data.length > 0) {
+        const averageCpu =
+          data.reduce(
+            (total, server) =>
+              total + server.cpu_usage,
+            0
+          ) / data.length;
+
+        const averageLatency =
+          data.reduce(
+            (total, server) =>
+              total + server.latency,
+            0
+          ) / data.length;
+
+        const totalRequests =
+          data.reduce(
+            (total, server) =>
+              total + server.request_count,
+            0
+          );
+
+        const time =
+          new Date().toLocaleTimeString(
+            [],
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }
+          );
+
+        setMetricsHistory(
+          (previousHistory) => {
+            const updatedHistory = [
+              ...previousHistory,
+              {
+                time: time,
+                cpu: Number(
+                  averageCpu.toFixed(1)
+                ),
+                latency: Number(
+                  averageLatency.toFixed(1)
+                ),
+                requests: totalRequests,
+              },
+            ];
+
+            return updatedHistory.slice(-30);
+          }
+        );
+      }
     } catch {
       setError(
         "Could not connect to the DCInsight backend."
@@ -360,6 +426,105 @@ function App() {
         <div className="overview-card">
           <span>Total Requests</span>
           <strong>{totalRequests}</strong>
+        </div>
+      </section>
+
+      <section className="metrics-panel">
+        <div className="metrics-header">
+          <div>
+            <span className="control-label">
+              LIVE METRICS
+            </span>
+
+            <h2>Datacenter Performance</h2>
+          </div>
+
+          <span>
+            Last 30 seconds
+          </span>
+        </div>
+
+        <div className="charts-grid">
+          <div className="chart-card">
+            <h3>Average CPU</h3>
+
+            <ResponsiveContainer
+              width="100%"
+              height={230}
+            >
+              <LineChart
+                data={metricsHistory}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#1d2c40"
+                />
+
+                <XAxis
+                  dataKey="time"
+                  stroke="#64748b"
+                  tick={{ fontSize: 11 }}
+                />
+
+                <YAxis
+                  domain={[0, 100]}
+                  stroke="#64748b"
+                  tick={{ fontSize: 11 }}
+                />
+
+                <Tooltip />
+
+                <Line
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#38bdf8"
+                  strokeWidth={2}
+                  dot={false}
+                  name="CPU %"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="chart-card">
+            <h3>Average Latency</h3>
+
+            <ResponsiveContainer
+              width="100%"
+              height={230}
+            >
+              <LineChart
+                data={metricsHistory}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#1d2c40"
+                />
+
+                <XAxis
+                  dataKey="time"
+                  stroke="#64748b"
+                  tick={{ fontSize: 11 }}
+                />
+
+                <YAxis
+                  stroke="#64748b"
+                  tick={{ fontSize: 11 }}
+                />
+
+                <Tooltip />
+
+                <Line
+                  type="monotone"
+                  dataKey="latency"
+                  stroke="#a78bfa"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Latency ms"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </section>
 

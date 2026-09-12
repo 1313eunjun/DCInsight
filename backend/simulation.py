@@ -120,19 +120,32 @@ class LoadBalancer:
         self.current_index = 0
 
     def route_request(self):
+        if not self.servers:
+            print(
+                "No servers available"
+            )
+            return
+
+        # Autoscaling may remove servers.
+        # Keep the round-robin index valid.
+        self.current_index %= len(
+            self.servers
+        )
+
         attempts = 0
 
         while attempts < len(self.servers):
+            self.current_index %= len(
+                self.servers
+            )
+
             server = self.servers[
                 self.current_index
             ]
 
-            self.current_index += 1
-
-            if self.current_index >= len(
-                self.servers
-            ):
-                self.current_index = 0
+            self.current_index = (
+                self.current_index + 1
+            ) % len(self.servers)
 
             if server.status == "healthy":
                 server.handle_request()
