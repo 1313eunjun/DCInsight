@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from contextlib import asynccontextmanager
 
@@ -6,6 +7,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from simulation import Server, LoadBalancer
+
+
+MIN_SERVERS = 3
+MAX_SERVERS = 6
+
+SCALE_OUT_CPU_THRESHOLD = 75
+SCALE_OUT_QUEUE_THRESHOLD = 6
+
+SCALE_IN_CPU_THRESHOLD = 35
+SCALE_IN_QUEUE_THRESHOLD = 1
+
+SCALE_OUT_COOLDOWN = 5
+SCALE_IN_COOLDOWN = 8
+
+LOW_LOAD_REQUIRED_TICKS = 5
 
 
 servers = [
@@ -20,48 +36,186 @@ load_balancer = LoadBalancer(
 
 next_server_id = 4
 
+last_scale_out_time = 0
+last_scale_in_time = 0
 
-def maybe_scale_out():
-    global next_server_id
+low_load_ticks = 0
 
-    active_servers = [
+
+def get_active_servers():
+    return [
         server
         for server in servers
         if server.status != "failed"
     ]
 
-    if not active_servers:
-        return
 
-    average_cpu = sum(
+def get_average_cpu(active_servers):
+    if not active_servers:
+        return 0
+
+    return sum(
         server.cpu_usage
         for server in active_servers
     ) / len(active_servers)
 
-    average_queue = sum(
+
+def get_average_queue(active_servers):
+    if not active_servers:
+        return 0
+
+    return sum(
         server.queue_length
         for server in active_servers
     ) / len(active_servers)
 
+
+def maybe_scale_out():
+    global next_server_id
+    global last_scale_out_time
+    global low_load_ticks
+
+    active_servers = get_active_servers()
+
+    if not active_servers:
+        return
+
+    if len(servers) >= MAX_SERVERS:
+        return
+
+    current_time = time.time()
+
+    time_since_last_scale_out = (
+        current_time
+        - last_scale_out_time
+    )
+
     if (
-        average_cpu >= 75
-        or average_queue >= 6
+        time_since_last_scale_out
+        < SCALE_OUT_COOLDOWN
     ):
-        if len(servers) < 6:
-            new_server = Server(
-                next_server_id
-            )
+        return
 
-            servers.append(
-                new_server
-            )
+    average_cpu = get_average_cpu(
+        active_servers
+    )
 
-            print(
-                f"Autoscaler added "
-                f"Server {new_server.server_id}"
-            )
+    average_queue = get_average_queue(
+        active_servers
+    )
 
-            next_server_id += 1
+    if (
+        average_cpu
+        >= SCALE_OUT_CPU_THRESHOLD
+        or
+        average_queue
+        >= SCALE_OUT_QUEUE_THRESHOLD
+    ):
+        new_server = Server(
+            next_server_id
+        )
+
+        servers.append(
+            new_server
+        )
+
+        print(
+            f"Autoscaler added "
+            f"Server {new_server.server_id}"
+        )
+
+        next_server_id += 1
+
+        last_scale_out_time = (
+            current_time
+        )
+
+        low_load_ticks = 0
+
+
+def maybe_scale_in():
+    global last_scale_in_time
+    global low_load_ticks
+
+    if len(servers) <= MIN_SERVERS:
+        low_load_ticks = 0
+        return
+
+    active_servers = get_active_servers()
+
+    if not active_servers:
+        low_load_ticks = 0
+        return
+
+    average_cpu = get_average_cpu(
+        active_servers
+    )
+
+    average_queue = get_average_queue(
+        active_servers
+    )
+
+    low_load = (
+        average_cpu
+        <= SCALE_IN_CPU_THRESHOLD
+        and
+        average_queue
+        <= SCALE_IN_QUEUE_THRESHOLD
+    )
+
+    if low_load:
+        low_load_ticks += 1
+    else:
+        low_load_ticks = 0
+        return
+
+    if (
+        low_load_ticks
+        < LOW_LOAD_REQUIRED_TICKS
+    ):
+        return
+
+    current_time = time.time()
+
+    time_since_last_scale_in = (
+        current_time
+        - last_scale_in_time
+    )
+
+    if (
+        time_since_last_scale_in
+        < SCALE_IN_COOLDOWN
+    ):
+        return
+
+    removable_server = None
+
+    for server in reversed(servers):
+        if (
+            server.status == "healthy"
+            and
+            server.queue_length == 0
+        ):
+            removable_server = server
+            break
+
+    if removable_server is None:
+        return
+
+    servers.remove(
+        removable_server
+    )
+
+    print(
+        f"Autoscaler removed "
+        f"Server {removable_server.server_id}"
+    )
+
+    last_scale_in_time = (
+        current_time
+    )
+
+    low_load_ticks = 0
 
 
 async def simulation_loop():
@@ -72,6 +226,7 @@ async def simulation_loop():
             server.cool_down()
 
         maybe_scale_out()
+        maybe_scale_in()
 
 
 @asynccontextmanager
